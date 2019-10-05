@@ -13,7 +13,7 @@
                 <el-button @click='searchData()' slot="append" icon="el-icon-search"></el-button>
             </el-input>
             <!-- 添加用户 -->
-            <el-button type="primary" @click="dialogFormVisibleAdd = true">添加用户</el-button>
+            <el-button type="primary" @click="userAddTop()">添加用户</el-button>
         </div>
 
         <!-- 表格 -->
@@ -35,18 +35,19 @@
             </el-table-column>
             <el-table-column label="状态">
                 <template slot-scope='scope'>
-                    <el-switch v-model="scope.row.mg_state" active-color="#13ce66" inactive-color="#ff4949">
+                    <el-switch v-model="scope.row.mg_state" @change="changeStatus(scope.row)" active-color="#13ce66"
+                        inactive-color="#ff4949">
                     </el-switch>
                 </template>
             </el-table-column>
             <el-table-column label="操作" width="200">
                 <template slot-scope='scope'>
                     <el-row>
-                        <el-button size='mini' plain type="primary"  @click="dialogFormVisibleEdit = true" icon="el-icon-edit"
+                        <el-button size='mini' plain type="primary" @click="userUpdate(scope.row)" icon="el-icon-edit"
                             circle>
                         </el-button>
-                        <el-button size='mini' plain type="success" @click="open(scope.row.id)" icon="el-icon-check"
-                            circle>
+                        <el-button size='mini' plain type="success" @click="userPermission(scope.row)"
+                            icon="el-icon-check" circle>
                         </el-button>
                         <el-button size='mini' plain type="danger" @click="open(scope.row.id)" icon="el-icon-delete"
                             circle>
@@ -90,7 +91,7 @@
         <el-dialog title="添加用户" :visible.sync="dialogFormVisibleEdit">
             <el-form :model="form">
                 <el-form-item label="用户名" label-width="100px">
-                    <el-input v-model="form.username" autocomplete="off"></el-input>
+                    <el-input disabled v-model="form.username" autocomplete="off"></el-input>
                 </el-form-item>
                 <el-form-item label="邮箱" label-width="100px">
                     <el-input v-model="form.email" autocomplete="off"></el-input>
@@ -102,9 +103,32 @@
             </el-form>
             <div slot="footer" class="dialog-footer">
                 <el-button @click="dialogFormVisibleEdit = false">取 消</el-button>
-                <el-button type="primary" @click="userEdit()">确 定</el-button>
+                <el-button type="primary" @click="userUpdataCommit()">确 定</el-button>
+            </div>
+
+
+        </el-dialog>
+
+        <!-- 角色选项弹出对话框 -->
+        <el-dialog title="选择权限" :visible.sync="dialogFormVisibleUser">
+            <el-form>
+                <el-form-item label="用户名称" label-width="100px">
+                    {{ userName }}
+                </el-form-item>
+                <el-form-item label="选择权限" label-width="100px">
+                    <el-select v-model="roleId" placeholder="请选择">
+                        <el-option label="请选择" :value="-1"></el-option>
+                        <el-option v-for='itme in roleList' :key="itme.id" :label="itme.roleName" :value="itme.id">
+                        </el-option>
+                    </el-select>
+                </el-form-item>
+            </el-form>
+            <div slot="footer" class="dialog-footer">
+                <el-button @click="dialogFormVisibleUser = false">取 消</el-button>
+                <el-button type="primary" @click="commintPermissins()">确 定</el-button>
             </div>
         </el-dialog>
+
     </el-card>
 </template>
 
@@ -119,8 +143,16 @@
                 ],
                 total: 0,
                 dialogFormVisibleAdd: false,
-                dialogFormVisibleEdit:false,
+                dialogFormVisibleEdit: false,
+                dialogFormVisibleUser: false,
+                //角色权限
+                userName: '231',
+                userId: -1,
+                roleId: -1,
+                roleList: [],
+                currentRoleId: 1,
                 form: {
+                    id: '',
                     username: '',
                     password: '',
                     email: '',
@@ -161,6 +193,12 @@
                 this.pagenum = val
                 this.getDataList()
             },
+            //添加用户
+            userAddTop() {
+                this.from = {}
+                this.dialogFormVisibleAdd = true
+
+            },
             //提交请求
             async userAdd() {
                 this.dialogFormVisibleAdd = false
@@ -181,6 +219,10 @@
                     this.$message.error(msg)
                 }
 
+            },
+            // 切换状态
+            async changeStatus(user) {
+                const res = await this.$http.put(`users/${user.id}/state/${user.mg_state}`)
             },
             // 操作相关
             open(userId) {
@@ -212,6 +254,53 @@
                         message: '已取消删除'
                     });
                 });
+
+            },
+            //角色选择对话框
+            async userPermission(user) {
+                const res = await this.$http.get(`users/${user.id}`)
+                if (res.data.meta.status === 200) {
+                    this.userId = res.data.data.id
+                    this.roleId = res.data.data.rid
+                    this.dialogFormVisibleUser = true
+                    console.log(user.rid)
+                    const res2 = await this.$http.get(`roles`)
+                    if (res2.data.meta.status === 200) {
+                        this.roleList = res2.data.data
+                    }
+                } else {
+                    this.$message.error(res.data.meta.msg)
+                }
+
+            },
+            //提交角色权限
+            async commintPermissins() {
+                const res = await this.$http.put(`users/${this.userId}/role`, { 'rid': this.roleId })
+                if (res.data.meta.status === 200) {
+                    this.$message.success(res.data.meta.msg)
+                    this.dialogFormVisibleUser = false
+                    this.getDataList()
+                }else{
+                    this.$message.error(res.data.meta.msg)
+                }
+            },
+            //更新用户
+            userUpdate(user) {
+
+                this.form = user
+                this.dialogFormVisibleEdit = true
+            },
+            //更新用户提交
+
+            async userUpdataCommit() {
+                const res = await this.$http.put(`users/${this.form.id}`, this.form)
+                if (res.data.meta.status == 200) {
+                    this.$message.success(res.data.meta.msg)
+                    this.getDataList()
+                } else {
+                    this.$message.error(res.data.meta.msg)
+                }
+                this.dialogFormVisibleEdit = false
 
             }
         }
